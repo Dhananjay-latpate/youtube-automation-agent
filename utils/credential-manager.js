@@ -40,6 +40,14 @@ class CredentialManager {
     } catch (error) {
       this.credentials = {};
     }
+    // Railway secrets override the persisted OAuth client without exposing it.
+    if (process.env.YOUTUBE_CLIENT_ID && process.env.YOUTUBE_CLIENT_SECRET) {
+      this.credentials.youtube = {
+        client_id: process.env.YOUTUBE_CLIENT_ID,
+        client_secret: process.env.YOUTUBE_CLIENT_SECRET,
+        redirect_uris: [process.env.YOUTUBE_REDIRECT_URI || 'http://127.0.0.1']
+      };
+    }
   }
 
   async loadTokens() {
@@ -48,6 +56,20 @@ class CredentialManager {
       this.tokens = JSON.parse(data);
     } catch (error) {
       this.tokens = {};
+    }
+    if (process.env.YOUTUBE_TOKENS_JSON) {
+      // Do not reuse an access token from a different OAuth client or channel.
+      let tokens;
+      try {
+        tokens = JSON.parse(process.env.YOUTUBE_TOKENS_JSON);
+      } catch {
+        throw new Error('YOUTUBE_TOKENS_JSON must contain valid JSON');
+      }
+      const youtube = tokens?.youtube || tokens;
+      if (!youtube || typeof youtube.refresh_token !== 'string' || !youtube.refresh_token.trim()) {
+        throw new Error('YOUTUBE_TOKENS_JSON must include a refresh_token');
+      }
+      this.tokens.youtube = youtube;
     }
   }
 
@@ -610,7 +632,8 @@ class CredentialManager {
       await this.loadCredentials();
       await this.loadTokens();
     } catch (error) {
-      // Files might not exist yet
+      this.logger.warn('Unable to load credential configuration');
+      return false;
     }
 
     const missing = this.getMissingCredentials();
