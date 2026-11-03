@@ -1,0 +1,11 @@
+.git
+node_modules
+.env
+.env.*
+! .env.example
+config/credentials.json
+config/tokens.json
+data
+uploads
+logs
+temp
